@@ -17,6 +17,12 @@ def svg_to_points_list(svg_file_path, samples_per_segment=20):
 
     return all_points
 
+def get_point_lists_from_svgs(svg_file_paths, samples_per_segment=20):
+    point_lists = []
+    for svg_file_path in svg_file_paths:
+        points = svg_to_points_list(svg_file_path, samples_per_segment)
+        point_lists.append(points)
+    return point_lists
 
-points = svg_to_points_list(svg_file_path)
-print(points[:10])  # first few (x, y) coordinates
+#points = svg_to_points_list(svg_file_path)
+#print(points[:10])  # first few (x, y) coordinates
