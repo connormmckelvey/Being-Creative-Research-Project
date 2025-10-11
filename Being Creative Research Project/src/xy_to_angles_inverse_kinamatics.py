@@ -1,5 +1,16 @@
 import math
 
+def radians_to_degrees(rad):
+    """
+    Convert radians to degrees.
+
+    Parameters:
+    rad (float): Angle in radians.
+
+    Returns:
+    float: Angle in degrees.
+    """
+    return rad * (180.0 / math.pi)
 
 def compute_joint_angles(x, y, l1, l2):
     """
@@ -15,10 +26,12 @@ def compute_joint_angles(x, y, l1, l2):
     Returns:
     tuple: A tuple containing the two joint angles (shoulder (theta1), elbow (theta2)) in radians.
     """
-    return (calculate_shoulder_theta(x, y, l1, l2),
-            calculate_elbow_theta(x, y, l1, l2))
+    if x is None and y is None:
+        return (None, None)
+    
+    return (radians_to_degrees(calculate_shoulder_theta(x, y, l1, l2)),
+            radians_to_degrees(calculate_elbow_theta(x, y, l1, l2)))
 
-    return theta1, theta2
 
 def calculate_shoulder_theta(x, y, L1, L2):
     """
