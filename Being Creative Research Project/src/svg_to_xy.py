@@ -11,15 +11,15 @@ def svg_to_points_list(svg_path, samples_per_segment=20):
     paths, attributes, svg_attributes = svg2paths2(svg_file_path)
     paths = split_svg_paths(paths)
     all_points = []
-    print(f"Loaded {len(paths)} paths from {svg_file_path}")
     for path in paths:
+        iter_count = 0
         for segment in path:
             for t in [i / samples_per_segment for i in range(samples_per_segment + 1)]:
                 point = segment.point(t)
                 all_points.append((point.real, point.imag))
         all_points.append((None, None))  # Separator between paths
-
-    return all_points
+    return add_pen_down_none_tuples(all_points)
+    #return all_points
 
 def get_point_lists_from_svgs(svg_file_paths, samples_per_segment=20):
     point_lists = []
@@ -44,5 +44,19 @@ def split_svg_paths(paths):
             split_paths.append(current_path)
     return split_paths
 
+def add_pen_down_none_tuples(points):
+    # First, find all indices of (None, None)
+    none_indices = []
+    for i in range(len(points)):
+        if points[i] == (None, None):
+            none_indices.append(i)
+    
+    # Ignore the last one
+    for idx in range(len(none_indices) - 1):
+        pos = none_indices[idx]
+        # Insert two positions after, accounting for previous insertions
+        insert_pos = pos + 2 + idx
+        points.insert(insert_pos, (None, None))
+    return points
 #points = svg_to_points_list(svg_file_path)
 #print(points[:10])  # first few (x, y) coordinates

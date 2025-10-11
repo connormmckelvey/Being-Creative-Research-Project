@@ -35,4 +35,3 @@ if __name__ == '__main__':
         with open(BASE_DIR / "data" / f"output_{file.name}.txt", "w") as f:
             for point in points:
                 f.write(f"{point}\n")
-    
