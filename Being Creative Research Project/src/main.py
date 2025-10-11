@@ -25,14 +25,14 @@ def main(port = 'COM3', baudrate = 9600, timeout = 1):
 
 if __name__ == '__main__':
     #main()
-    points = svg_to_points_list("cloud-arrow-down.svg")
-    print("first xy points:")
-    for point in points[:10]:
-        print(point)  # first few (x, y) coordinates
-    print("first joint angles (radians):")
-    for point in points[:10]:
-        print(compute_joint_angles(point[0], point[1], 10, 10))
-    with open(BASE_DIR / "data" / "output.txt", "w") as f:
-        for point in points:
-            f.write(f"{point}\n")
+    for file in (BASE_DIR / "data" / "svg_files").iterdir():
+        points = svg_to_points_list(file.name)
+        for point in points[:10]:
+            print(point)  # first few (x, y) coordinates
+        print("first joint angles (degrees):")
+        #for point in points[:10]:
+        #    print(compute_joint_angles(point[0], point[1], 10, 10))
+        with open(BASE_DIR / "data" / f"output_{file.name}.txt", "w") as f:
+            for point in points:
+                f.write(f"{point}\n")
     

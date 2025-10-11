@@ -48,5 +48,7 @@ def draw_points(points):
 
 # --- Main ---
 if __name__ == "__main__":
-    points = load_points(filename=BASE_DIR / "data" / "output.txt")
-    draw_points(points)
+    for file in (BASE_DIR / "data" / "svg_files").iterdir():
+        points = load_points(filename=BASE_DIR / "data" / f"output_{file.name}.txt")
+        draw_points(points)
+        plt.close('all')  # close any remaining figures
