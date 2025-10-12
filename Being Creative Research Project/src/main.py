@@ -23,6 +23,7 @@ def main(port = 'COM3', baudrate = 9600, timeout = 1):
     except KeyboardInterrupt:
         print('Exiting...')
 
+
 if __name__ == '__main__':
     #main()
     for file in (BASE_DIR / "data" / "svg_files").iterdir():

@@ -32,7 +32,6 @@ def compute_joint_angles(x, y, l1, l2):
     return (radians_to_degrees(calculate_shoulder_theta(x, y, l1, l2)),
             radians_to_degrees(calculate_elbow_theta(x, y, l1, l2)))
 
-
 def calculate_shoulder_theta(x, y, L1, L2):
     """
     Calculate the shoulder joint angle (theta1) for a 2D planar robotic arm given the end-effector position (x, y)
