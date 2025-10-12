@@ -19,8 +19,8 @@ def svg_to_points_list(svg_path, samples_per_segment=20):
                 all_points.append((point.real, point.imag))
         all_points.append((None, None))  # Separator between paths
     all_points = add_pen_down_none_tuples(all_points)
-    return all_points.append((None, None))
-    #return all_points
+    all_points.append((None, None))
+    return all_points
 
 def get_point_lists_from_svgs(svg_file_paths, samples_per_segment=20):
     point_lists = []
