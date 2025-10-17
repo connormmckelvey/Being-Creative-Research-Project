@@ -80,6 +80,7 @@ void loop() {
       float shoulder_angle, elbow_angle;
       if (sscanf(input.c_str(), "(%f, %f)", &shoulder_angle, &elbow_angle) == 2) {
         move_to(shoulder_angle, elbow_angle);
+        Serial.println("DONE");
       } else {
         Serial.println("Invalid input format!");
       }
