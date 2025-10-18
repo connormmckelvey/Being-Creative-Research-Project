@@ -5,53 +5,92 @@ from pathlib import Path
 import serial
 import time
 
+# --- Configuration ---
 BASE_DIR = Path(__file__).parent.parent
-COMMAND_FILE = BASE_DIR / "data" / "command_files" / "commands.txt"
+# Make sure this path points correctly to your commands.txt file
+COMMAND_FILE = BASE_DIR / "data" / "command_files" / "commands.txt" 
+SERIAL_PORT = 'COM3'  # <-- CHANGE THIS to your Arduino's serial port
+BAUDRATE = 9600
 
-def main(port='COM3', baudrate=9600, timeout=1, delay=0.05):
+# --- Constants ---
+# These should match the constants in your Arduino sketch
+ARDUINO_BUFFER_SIZE = 10
+ARDUINO_LOW_THRESHOLD = 3
+# Calculate batch size to send to avoid overflowing the Arduino buffer
+COMMAND_BATCH_SIZE = ARDUINO_BUFFER_SIZE - ARDUINO_LOW_THRESHOLD
+
+
+def main():
     """
-    Sends commands from a text file to the Arduino via serial line-by-line.
-    Each line is sent only after the Arduino responds with 'OK' or similar.
+    Connects to the Arduino and sends commands in batches upon request.
     """
     if not COMMAND_FILE.exists():
-        print(f"Error: command file not found at {COMMAND_FILE}")
+        print(f"❌ Error: Command file not found at {COMMAND_FILE}")
         return
 
-    # Read all commands from file
+    # Read all commands from the file, filtering out empty lines
     with open(COMMAND_FILE, 'r') as f:
-        commands = [line.strip() for line in f if line.strip()]
+        # Also filter out any lines with '(None, None)'
+        commands = [
+            line.strip() for line in f 
+            if line.strip() and '(None, None)' not in line
+        ]
 
     if not commands:
-        print("Error: command file is empty.")
+        print("❌ Error: Command file is empty or contains no valid commands.")
         return
 
+    print("Attempting to connect to Arduino...")
     try:
-        with serial.Serial(port, baudrate, timeout=timeout) as ser:
-            print(f"Connected to {port} at {baudrate} baud.")
+        with serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1) as ser:
+            print(f"✅ Connected to {SERIAL_PORT} at {BAUDRATE} baud.")
+            print("Waiting for Arduino to initialize...")
             time.sleep(2)  # Wait for Arduino to reset
 
-            for i, cmd in enumerate(commands):
-                ser.write((cmd + '\n').encode())
-                print(f"[{i+1}/{len(commands)}] Sent: {cmd}")
-
-                #Optional: wait for Arduino acknowledgment
-                while True:
+            # --- Synchronization: Wait for the first REQUEST ---
+            print("Waiting for the first 'REQUEST' from Arduino to start...")
+            initial_request_received = False
+            while not initial_request_received:
+                if ser.in_waiting > 0:
                     response = ser.readline().decode().strip()
                     if response:
                         print(f"Arduino: {response}")
-                        if response.lower() in ["ok", "done", "next"]:
-                            break
-                        elif "error" in response.lower():
-                            print("Arduino reported an error. Stopping.")
-                            return
-                    time.sleep(delay)
+                    if "REQUEST" in response:
+                        initial_request_received = True
+                        print("🚀 Arduino is ready! Starting command stream.")
+            
+            # --- Main Sending Loop ---
+            command_index = 0
+            while command_index < len(commands):
+                if ser.in_waiting > 0:
+                    response = ser.readline().decode().strip()
+                    if response:
+                        print(f"Arduino: {response}")
 
-            print("✅ All commands sent successfully.")
+                    # If Arduino requests more, send the next batch
+                    if "REQUEST" in response:
+                        print(f"--> Received REQUEST. Sending batch of up to {COMMAND_BATCH_SIZE} commands.")
+                        
+                        for _ in range(COMMAND_BATCH_SIZE):
+                            if command_index < len(commands):
+                                cmd = commands[command_index]
+                                ser.write((cmd + '\n').encode())
+                                print(f"    Sent [{command_index + 1}/{len(commands)}]: {cmd}")
+                                command_index += 1
+                                time.sleep(0.05) # Small delay between sends
+                            else:
+                                break # No more commands left
+            
+            print("\n🎉 All commands sent. The robot will now complete its final moves.")
 
     except serial.SerialException as e:
-        print(f"Serial error: {e}")
+        print(f"\n❌ SERIAL ERROR: {e}")
+        print("Please check the following:")
+        print(f"  1. Is the Arduino plugged in?")
+        print(f"  2. Is '{SERIAL_PORT}' the correct port? Check the Arduino IDE.")
+        print(f"  3. Is another program (like the Arduino Serial Monitor) using the port?")
     except KeyboardInterrupt:
-        print("Exiting...")
+        print("\n🛑 Program stopped by user.")
 
 
 if __name__ == '__main__':
