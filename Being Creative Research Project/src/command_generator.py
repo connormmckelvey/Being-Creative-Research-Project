@@ -27,7 +27,7 @@ def generate_commands(xypoints, l1, l2):
                 print(f"Warning: {e}.")
 
     command_list.insert(0, "START")
-    command_list.insert(1, "PEN DOWN")  # Start with pen up
+    command_list.insert(2, "PEN DOWN")  # Start with pen up
 
     command_list.append("PEN UP")  # End with pen up
     command_list.append("END")
