@@ -23,7 +23,7 @@ def svg_to_points_list(svg_path, samples_per_segment, arm_L1, arm_L2, margin):
         raw_points.append((None, None))  # Separator between paths
 
     # --- Scale and move to fit on paper ---
-    scaled_points = normalize_and_scale_points(raw_points, arm_L1, arm_L2, margin)
+    scaled_points = normalize_and_scale_points(raw_points, arm_L1 * 0.9, arm_L2 * 0.9, margin)
 
     scaled_points = add_pen_down_none_tuples(scaled_points)
     scaled_points.append((None, None))
