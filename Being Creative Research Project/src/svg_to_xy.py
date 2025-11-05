@@ -23,11 +23,7 @@ def svg_to_points_list(svg_path, samples_per_segment, arm_L1, arm_L2, margin):
         raw_points.append((None, None))  # Separator between paths
 
     # --- Scale and move to fit on paper ---
-    scaled_points = normalize_and_scale_points(
-        raw_points,
-        arm_L1 + arm_L2,
-        margin
-    )
+    scaled_points = normalize_and_scale_points(raw_points, arm_L1, arm_L2, margin)
 
     scaled_points = add_pen_down_none_tuples(scaled_points)
     scaled_points.append((None, None))
@@ -68,9 +64,10 @@ def add_pen_down_none_tuples(points):
     return points
 
 
-def normalize_and_scale_points(points, max_reach, margin):
+def normalize_and_scale_points(points, l1, l2, margin=1.0):
     """
-    Move and scale SVG points so they fit inside the robot’s reachable area (0,0 corner).
+    Normalize and scale SVG points so they fit inside the robot’s reachable area
+    assuming the arm base is at (0,0) — a corner of the paper.
     """
     valid_points = [(x, y) for (x, y) in points if x is not None and y is not None]
     if not valid_points:
@@ -85,13 +82,13 @@ def normalize_and_scale_points(points, max_reach, margin):
     width = max_x - min_x
     height = max_y - min_y
 
-    # Max area the arm can draw in (approx. a circle radius max_reach)
-    max_size = (max_reach - margin)
+    # The maximum distance the arm can reach diagonally
+    max_reach = l1 + l2 - margin
 
-    # Uniform scaling to fit within reach
-    scale = min(max_size / width, max_size / height)
+    # Scale uniformly so that farthest corner fits within circular reach
+    diagonal = (width**2 + height**2)**0.5
+    scale = max_reach / diagonal if diagonal != 0 else 1
 
-    # Translate so (0,0) is the lower-left of the drawing area
     scaled_points = []
     for (x, y) in points:
         if x is None or y is None:
@@ -100,4 +97,5 @@ def normalize_and_scale_points(points, max_reach, margin):
             new_x = (x - min_x) * scale + margin
             new_y = (y - min_y) * scale + margin
             scaled_points.append((new_x, new_y))
+
     return scaled_points

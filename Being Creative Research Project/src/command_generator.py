@@ -24,7 +24,7 @@ def generate_commands(xypoints, l1, l2):
             try:
               command_list[i] = compute_joint_angles(xypoints[i][0], xypoints[i][1], l1, l2)
             except ValueError as e:
-                print(f"Warning: {e}.")
+                print(f"Warning: {e}. print {xypoints[i]} skipped.")
 
     command_list.insert(0, "START")
     command_list.insert(2, "PEN DOWN")  # Start with pen up

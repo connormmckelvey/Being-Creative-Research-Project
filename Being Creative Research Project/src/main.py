@@ -122,4 +122,7 @@ def generate_robot_command_from_svg(svg_filename, l1, l2, samples_per_segment=20
     - sends commands in batches upon request from the Arduino
 '''
 if __name__ == '__main__':
-    generate_robot_command_from_svg("one_thing_flag.svg", l1=12.5, l2=12.5, samples_per_segment=5)
+    SVG_FILES_DIR = BASE_DIR / "data" / "svg_files"
+    for file in SVG_FILES_DIR.iterdir():
+        print(f"Using command file: {file.name}")
+        generate_robot_command_from_svg(file.name, l1=12.5, l2=12.5, samples_per_segment=5)
