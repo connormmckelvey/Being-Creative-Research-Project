@@ -33,10 +33,10 @@ def generate_commands(xypoints, l1, l2):
     command_list.append("END")
     return command_list
 
-def generate_commands_file(command_list):
+def generate_commands_file(command_list, name):
     ''' Generate a command file from a list of commands given in the format returned by generate_commands '''
-    
-    with open(BASE_DIR / "data" / "command_files" / "commands.txt", "w") as f:
+    name = f"commands_{name}.txt"
+    with open(BASE_DIR / "data" / "command_file_storage" / name, "w") as f:
         for command in command_list:
             f.write(f"{command}\n")
 

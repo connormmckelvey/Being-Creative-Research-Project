@@ -15,12 +15,23 @@ def load_points(filename):
     return points
 
 
-def draw_points(points):
+def draw_points(points, arm_L1=12.5, arm_L2=12.5, margin=2, speed=0.001):
+    """
+    Visualize robot drawing path.
+    Automatically scales axes to match robot reach and draws faster.
+    """
+    # Determine total reach in same units as your (x, y) data
+    max_reach = arm_L1 + arm_L2
+    limit = max_reach + margin
+
     plt.ion()
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.set_xlim(-200, 200)
-    ax.set_ylim(-200, 200)
+    ax.set_xlim(-limit, limit)
+    ax.set_ylim(-limit, limit)
+    ax.set_title("Robot Drawing Path")
+    ax.set_xlabel("X (cm)")
+    ax.set_ylabel("Y (cm)")
     line, = ax.plot([], [], 'r-', lw=2)
     pen_x, pen_y = [], []
     pen_down = True
@@ -35,20 +46,21 @@ def draw_points(points):
             pen_y.append(y)
             line.set_data(pen_x, pen_y)
         else:
-            # move pen without drawing
+            # lift pen and move without drawing
             pen_x.append(None)
             pen_y.append(None)
             pen_down = True  # lower pen after moving
 
-        plt.draw()
-        plt.pause(0.02)
+        plt.pause(speed)
 
     plt.ioff()
     plt.show()
 
+
 # --- Main ---
 if __name__ == "__main__":
-    for file in (BASE_DIR / "data" / "svg_files").iterdir():
-        points = load_points(filename=BASE_DIR / "data" / f"output_{file.name}.txt")
-        draw_points(points)
-        plt.close('all')  # close any remaining figures
+    xy_folder = BASE_DIR / "data" / "xy_file_storage"
+    for file in xy_folder.iterdir():
+        points = load_points(filename=xy_folder / file.name)
+        draw_points(points, arm_L1=12.5, arm_L2=12.5, margin=2, speed=0.001)
+        plt.close('all')
