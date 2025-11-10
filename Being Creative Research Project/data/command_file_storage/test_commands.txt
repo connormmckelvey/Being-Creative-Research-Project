@@ -1,0 +1,7 @@
+START
+PEN UP
+(0,0)
+(90,90)
+(180,180)
+PEN DOWN
+END

@@ -12,7 +12,7 @@ def generate_commands(xypoints, l1, l2):
     command_list = xypoints.copy()
 
     is_down = True
-    for i in range(len(xypoints) - 1):
+    for i in range(len(xypoints)):
         if xypoints[i] == (None, None):
             if is_down:
                 command_list[i] = "PEN UP"

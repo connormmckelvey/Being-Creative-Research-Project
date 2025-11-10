@@ -1,66 +1,121 @@
-import ast
+import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import ast
+import random
 
-BASE_DIR = Path(__file__).parent.parent
+# --- CONFIGURATION ---
+# NOTE: Adjust BASE_DIR if your main script's BASE_DIR is located differently.
+BASE_DIR = Path(__file__).parent.parent 
 
-
-def load_points(filename):
-    points = []
-    with open(filename, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                points.append(ast.literal_eval(line))
-    return points
-
-
-def draw_points(points, arm_L1=12.5, arm_L2=12.5, margin=2, speed=0.001):
+def read_points_file(xy_file_name):
     """
-    Visualize robot drawing path.
-    Automatically scales axes to match robot reach and draws faster.
+    Reads the list of (x, y) coordinates from a text file.
+    
+    IMPORTANT: This now assumes the file contains one tuple per line, 
+    matching the line-by-line output format of the external script.
     """
-    # Determine total reach in same units as your (x, y) data
-    max_reach = arm_L1 + arm_L2
-    limit = max_reach + margin
+    xy_file_path = BASE_DIR / "data" / "xy_files" / xy_file_name
+    points_list = []
+    
+    try:
+        with open(xy_file_path, 'r') as f:
+            for line in f:
+                stripped_line = line.strip()
+                if stripped_line:
+                    # Use ast.literal_eval to safely convert the string representation of the tuple 
+                    # (e.g., "(1.2, 3.4)" or "(None, None)") back into a Python tuple.
+                    point = ast.literal_eval(stripped_line)
+                    points_list.append(point)
+            return points_list
+    except FileNotFoundError:
+        print(f"Error: File not found at {xy_file_path}")
+        return []
+    except Exception as e:
+        # e.g., invalid syntax (<unknown>, line X)
+        print(f"Error reading or parsing file {xy_file_name}: {e}")
+        return []
 
-    plt.ion()
-    fig, ax = plt.subplots()
-    ax.set_aspect('equal')
-    ax.set_xlim(-limit, limit)
-    ax.set_ylim(-limit, limit)
-    ax.set_title("Robot Drawing Path")
-    ax.set_xlabel("X (cm)")
-    ax.set_ylabel("Y (cm)")
-    line, = ax.plot([], [], 'r-', lw=2)
-    pen_x, pen_y = [], []
-    pen_down = True
+def plot_xy_points(points_list, title="SVG Path Visualization"):
+    """
+    Plots the list of (x, y) coordinates, handling (None, None) as path breaks.
+    
+    Args:
+        points_list (list): The list of (x, y) coordinates with (None, None) separators.
+        title (str): The title for the plot.
+    """
+    if not points_list:
+        print("No points to plot.")
+        return
 
-    for (x, y) in points:
-        if x is None or y is None:
-            pen_down = False
-            continue
+    plt.figure(figsize=(8, 8))
+    plt.title(title)
+    plt.xlabel("X Coordinate")
+    plt.ylabel("Y Coordinate")
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.grid(True)
+    
+    # Track continuous segments
+    current_stroke = []
 
-        if pen_down:
-            pen_x.append(x)
-            pen_y.append(y)
-            line.set_data(pen_x, pen_y)
+    for point in points_list:
+        # Check for (None, None) or if the element is not a tuple (safety check, should be a tuple)
+        if point == (None, None) or not isinstance(point, tuple):
+            # End of a stroke/segment
+            if current_stroke:
+                # Convert list of tuples to numpy arrays for plotting
+                xs = [p[0] for p in current_stroke]
+                ys = [p[1] for p in current_stroke]
+                
+                # Assign a random color to each stroke for easy differentiation
+                color = (random.random(), random.random(), random.random())
+                
+                # Plot the stroke as a connected line, with a small marker for every point
+                plt.plot(xs, ys, color=color, linewidth=2, marker='o', markersize=2)
+                
+                # Plot the start/end points of the actual drawing path for clarity
+                # Ensure the labels only appear once in the legend
+                start_label = 'Start Point' if not any('Start Point' in L.get_label() for L in plt.gca().lines) else ""
+                end_label = 'End Point' if not any('End Point' in L.get_label() for L in plt.gca().lines) else ""
+
+                if len(current_stroke) > 0:
+                    # Plot start and end with different markers/colors for clarity
+                    plt.plot(xs[0], ys[0], 'o', color='green', markersize=5, label=start_label)
+                    plt.plot(xs[-1], ys[-1], 'x', color='red', markersize=5, label=end_label)
+
+            current_stroke = []
         else:
-            # lift pen and move without drawing
-            pen_x.append(None)
-            pen_y.append(None)
-            pen_down = True  # lower pen after moving
+            # Add valid point to the current stroke
+            current_stroke.append(point)
+            
+    # Add legend to clarify start/end points
+    if any(L.get_label() for L in plt.gca().lines):
+        # Filter out stroke line labels and keep only unique start/end labels
+        handles, labels = plt.gca().get_legend_handles_labels()
+        unique_legend = {}
+        for h, l in zip(handles, labels):
+            if l:
+                unique_legend[l] = h
+        
+        legend_handles = list(unique_legend.values())
+        legend_labels = list(unique_legend.keys())
+        
+        if legend_labels:
+            plt.legend(legend_handles, legend_labels, loc='best')
 
-        plt.pause(speed)
-
-    plt.ioff()
+    # Show the plot
     plt.show()
 
-
-# --- Main ---
-if __name__ == "__main__":
-    xy_folder = BASE_DIR / "data" / "xy_file_storage"
-    for file in xy_folder.iterdir():
-        points = load_points(filename=xy_folder / file.name)
-        draw_points(points, arm_L1=12.5, arm_L2=12.5, margin=2, speed=0.001)
-        plt.close('all')
+if __name__ == '__main__':
+    # --- EXAMPLE USAGE ---
+    # To test, replace 'example_output.txt' with your actual file name.
+    file_to_plot = 'output_take_it_slow_AI.svg.txt' # REPLACE with your actual file name
+    
+    # 2. Read the points from the file
+    points = read_points_file(file_to_plot)
+    
+    # 3. Plot the data
+    plot_xy_points(points, title=f"Visualization of {file_to_plot}")
+    
+    if not points:
+        print("\nNote: Please ensure you replace 'example_output.txt' with your file name and verify its format.")

@@ -4,12 +4,12 @@ from command_generator import *
 from pathlib import Path
 import serial
 import time
+import shutil
 
 # --- Configuration ---
 BASE_DIR = Path(__file__).parent.parent
 # Make sure this path points correctly to your commands.txt file
 COMMAND_FILE_DIR = BASE_DIR / "data" / "command_files" 
-COMMAND_FILE = next(COMMAND_FILE_DIR.glob('*'))
 SERIAL_PORT = 'COM3'  # <-- CHANGE THIS to your Arduino's serial port
 BAUDRATE = 9600
 
@@ -25,6 +25,7 @@ def main():
     """
     Connects to the Arduino and sends commands in batches upon request.
     """
+    COMMAND_FILE = next(COMMAND_FILE_DIR.glob('*'))
     if not COMMAND_FILE.exists():
         print(f"❌ Error: Command file not found at {COMMAND_FILE}")
         return
@@ -82,7 +83,27 @@ def main():
                             else:
                                 break # No more commands left
             
-            print("\n🎉 All commands sent. The robot will now complete its final moves.")
+            print("\n🎉 All commands sent. Waiting for Arduino to finish...")
+            
+            # --- FIX: Wait for the buffer to empty ---
+            # Keep the serial port open and listen for the final
+            # "REQUEST" signals, which indicate the buffer is empty.
+            final_request_count = 0
+            while final_request_count < 2: # Wait for 2 more requests
+                if ser.in_waiting > 0:
+                    response = ser.readline().decode().strip()
+                    if response:
+                        print(f"Arduino (finishing): {response}")
+                        if "REQUEST" in response:
+                            final_request_count += 1
+                else:
+                    # If no response, assume Arduino is done
+                    time.sleep(0.5)
+                    if not ser.in_waiting > 0:
+                         break # Break if no activity
+
+            print("✅ Robot should be finished. Closing port.")
+
 
     except serial.SerialException as e:
         print(f"\n❌ SERIAL ERROR: {e}")
@@ -95,7 +116,8 @@ def main():
 
 '''take an svg file at /data/svg_files/svg_filename and generate a command file at /data/command_files/commands.txt'''
 def generate_robot_command_from_svg(svg_filename, l1, l2, samples_per_segment=20):
-    points = svg_to_points_list(svg_filename, samples_per_segment=samples_per_segment, arm_L1=l1, arm_L2=l2, margin=2)
+    print(calculate_standardized_metrics(svg_filename))
+    points = svg_to_simplified_points_list(svg_filename, samples_per_segment=samples_per_segment, arm_L1=l1, arm_L2=l2, margin=2)
     print(f"Generated {len(points)} points from SVG '{svg_filename}'.")
     name = f"output_{svg_filename}.txt"
     with open(BASE_DIR / "data" / "xy_file_storage" / name, 'w') as f:
@@ -106,10 +128,32 @@ def generate_robot_command_from_svg(svg_filename, l1, l2, samples_per_segment=20
     command_list = generate_commands(points, l1, l2)
     generate_commands_file(command_list, svg_filename)
 
+def generate_robot_command_from_xy(xy_filename, l1, l2):
+    xy_file_path = BASE_DIR / "data" / "xy_files" / xy_filename
+    points = []
+    with open(xy_file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line == "(None, None)":
+                points.append((None, None))
+            else:
+                point = eval(line)
+                points.append(point)
+    print(f"Loaded {len(points)} points from XY file '{xy_filename}'. into command list.")
+    command_list = generate_commands(points, l1, l2)
+    generate_commands_file(command_list, xy_filename)
 
+def move_file_into_cmd_files(src_path):
+    shutil.move(src_path, BASE_DIR / "data" / "command_files" / src_path.name)
 
 
 '''USER FUNCTIONS TO CALL
+    move_file_into_cmd_files(src_path)
+    - moves a file at src_path into the /data/command_files/ directory
+    generate_robot_command_from_xy(xy_filename, l1, l2)
+    - expects an xy file in /data/xy_files/xy_filename
+    - l1 and l2 are the lengths of the two arm segments
+    - generates a command file at /data/command_file_storage/commands_xy_filename.txt
     generate_robot_command_from_svg(svg_filename, l1, l2)
     - expects an svg file in /data/svg_files/svg_filename
     - l1 and l2 are the lengths of the two arm segments
@@ -122,7 +166,12 @@ def generate_robot_command_from_svg(svg_filename, l1, l2, samples_per_segment=20
     - sends commands in batches upon request from the Arduino
 '''
 if __name__ == '__main__':
-    SVG_FILES_DIR = BASE_DIR / "data" / "svg_files"
-    for file in SVG_FILES_DIR.iterdir():
-        print(f"Using command file: {file.name}")
-        generate_robot_command_from_svg(file.name, l1=12.5, l2=12.5, samples_per_segment=5)
+      SVG_FILES_DIR = BASE_DIR / "data" / "svg_files"
+      for file in SVG_FILES_DIR.iterdir():
+         print(f"Using command file: {file.name}")
+         generate_robot_command_from_svg(file.name, l1=13, l2=12.5, samples_per_segment=5)
+    
+    
+    #generate_robot_command_from_xy("square_xy.txt", l1=13, l2=12.5)
+    #shutil.move(BASE_DIR / "data" / "command_file_storage" / "commands_square_xy.txt.txt", BASE_DIR / "data" / "command_files" / "commands_square_xy.txt.txt")
+    #main()
