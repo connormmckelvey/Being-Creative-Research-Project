@@ -4,35 +4,25 @@ from svgpathtools import svg2paths2, Path as svgPath
 from pathlib import Path
 
 # --- GLOBAL CONFIGURATION ---
-# IMPORTANT: This tolerance value controls the level of simplification applied 
-# to all paths. It must be consistent for human and AI drawings to ensure 
-# the 'standardized_node_count' is a fair comparison metric.
-RDP_TOLERANCE = 1.0 
-SAMPLES_PER_SEGMENT = 20 # Used for sampling the curve into a polyline before RDP
+RDP_TOLERANCE = 5.0 
+SAMPLES_PER_SEGMENT = 20
 
 # NOTE: Assuming BASE_DIR is set up in your main environment to point to the root
-# of your project where 'data/svg_files' resides.
 BASE_DIR = Path(__file__).parent.parent
 
-# --- RDP SIMPLIFICATION HELPER (FIXED) ---
+# --- RDP SIMPLIFICATION HELPER (RETAINED) ---
 
 def simplify_polyline_rdp(points, tolerance):
     """
     Applies the Ramer-Douglas-Peucker (RDP) algorithm to a polyline.
-    
-    FIX: Explicitly casts NumPy floats back to standard Python floats.
     """
     if not points:
         return []
         
-    # RDP library requires a NumPy array
     points_array = np.array(points)
-    
-    # Apply RDP simplification
     simplified_array = rdp(points_array, epsilon=tolerance)
     
-    # Convert back to a list of tuples, explicitly converting NumPy types to standard Python floats.
-    # This prevents the unwanted 'np.float64(...)' type string when writing to files.
+    # Convert back to a list of standard Python floats
     return [(float(p[0]), float(p[1])) for p in simplified_array]
 
 
@@ -45,15 +35,12 @@ def _sample_raw_points_for_path(path_list, samples_per_segment):
     raw_stroke_points = []
     
     for segment in path_list:
-        # Sample points along the segment (excluding the final endpoint to prevent double counting between segments)
         num_samples = samples_per_segment 
         for i in range(num_samples):
             t = i / samples_per_segment
             point = segment.point(t)
-            # svgpathtools returns complex numbers; extract real/imag as standard floats
             raw_stroke_points.append((float(point.real), float(point.imag)))
             
-    # Add the final point of the last segment to close the stroke
     if path_list:
         last_segment = path_list[-1]
         point = last_segment.point(1.0)
@@ -67,7 +54,7 @@ def _sample_raw_points_for_path(path_list, samples_per_segment):
 def calculate_standardized_metrics(svg_path_name):
     """
     Calculates key complexity metrics, including a standardized node count 
-    obtained via RDP simplification.
+    obtained via RDP simplification. (No coordinate flip needed here.)
     """
     svg_file_path = BASE_DIR / "data" / "svg_files" / svg_path_name
     
@@ -81,23 +68,16 @@ def calculate_standardized_metrics(svg_path_name):
             "standardized_node_count": 0
         }
 
-    # Split into distinct strokes
     split_paths = split_svg_paths(paths) 
     
     total_length = 0.0
     standardized_node_count = 0
     stroke_count = len(split_paths)
 
-    # 1. Iterate through all distinct strokes/paths
     for path in split_paths:
-        # A. Calculate total geometric path length
         total_length += path.length()
-        
-        # B. Sample, Simplify, and Count Standardized Nodes
         raw_stroke_points = _sample_raw_points_for_path(path, SAMPLES_PER_SEGMENT)
         simplified_points = simplify_polyline_rdp(raw_stroke_points, RDP_TOLERANCE)
-        
-        # The standardized node count is the number of points in the simplified polyline
         standardized_node_count += len(simplified_points)
 
     return {
@@ -107,14 +87,22 @@ def calculate_standardized_metrics(svg_path_name):
     }
 
 
-# --- MAIN POINT GENERATION FUNCTION (RETAINED) ---
+# --- MAIN POINT GENERATION FUNCTION (UPDATED) ---
 
 def svg_to_simplified_points_list(svg_path, samples_per_segment, arm_L1, arm_L2, margin):
     '''
     Convert an SVG file to a list of (x, y) coordinates. Paths are simplified 
     using RDP to standardize complexity before scaling/translation.
+    
+    The Y-axis is automatically inverted if the filename contains '_AI'.
     '''
     svg_file_path = BASE_DIR / "data" / "svg_files" / svg_path
+    
+    # --- AUTOMATIC INVERSION LOGIC ---
+    # Check if the file is AI-generated and needs Y-axis inversion
+    invert_y = "_AI" in svg_path
+    # -----------------------------------
+    
     paths, attributes, svg_attributes = svg2paths2(svg_file_path)
     split_paths = split_svg_paths(paths)
 
@@ -122,31 +110,31 @@ def svg_to_simplified_points_list(svg_path, samples_per_segment, arm_L1, arm_L2,
     simplified_points = []
     
     for path in split_paths:
-        # 1. Sample Raw Points
         raw_stroke_points = _sample_raw_points_for_path(path, samples_per_segment)
-        
-        # 2. Apply RDP Simplification (Standardization)
-        # The result here is guaranteed to be standard Python floats due to the fix in simplify_polyline_rdp
         simplified_stroke_points = simplify_polyline_rdp(raw_stroke_points, RDP_TOLERANCE)
         
-        # 3. Append to the final list with separators
         simplified_points.extend(simplified_stroke_points)
         simplified_points.append((None, None))  # Separator between paths
 
     # --- Scale and move to fit on paper ---
-    scaled_points = normalize_and_scale_points(simplified_points, arm_L1 * 0.9, arm_L2 * 0.9, margin)
+    scaled_points = normalize_and_scale_points(simplified_points, arm_L1 * 0.9, arm_L2 * 0.9, margin, invert_y)
 
-    # Add pen down/up instructions for robot (using your existing helper)
+    # Add pen down/up instructions for robot
     scaled_points = add_pen_down_none_tuples(scaled_points)
     scaled_points.append((None, None))
     return scaled_points
 
 
-# --- DEPENDENT HELPER FUNCTIONS ---
+# --- DEPENDENT HELPER FUNCTIONS (UPDATED) ---
 
 def get_point_lists_from_svgs(svg_file_paths, samples_per_segment=SAMPLES_PER_SEGMENT, arm_L1=12.5, arm_L2=12.5, margin=1.0):
+    """
+    Processes a list of SVG files, automatically applying coordinate inversion
+    based on the '_AI' naming convention.
+    """
     point_lists = []
     for svg_file_path in svg_file_paths:
+        # Call the single-file function, which now handles inversion automatically
         points = svg_to_simplified_points_list(svg_file_path, samples_per_segment, arm_L1, arm_L2, margin)
         point_lists.append(points)
     return point_lists
@@ -178,12 +166,10 @@ def add_pen_down_none_tuples(points):
     return points
 
 
-def normalize_and_scale_points(points, l1, l2, margin=1.0):
+def normalize_and_scale_points(points, l1, l2, margin, invert_y):
     """
-    Normalize and scale SVG points so they fit inside the robot’s reachable area.
-    
-    FIX: Inverts the Y-axis to correctly translate SVG coordinates (Y increases down)
-    to Cartesian coordinates (Y increases up).
+    Normalize and scale SVG points. Conditionally inverts Y-axis based on the 
+    'invert_y' flag passed from the caller (which checks the filename).
     """
     valid_points = [(x, y) for (x, y) in points if x is not None and y is not None]
     if not valid_points:
@@ -198,10 +184,7 @@ def normalize_and_scale_points(points, l1, l2, margin=1.0):
     width = max_x - min_x
     height = max_y - min_y
 
-    # The maximum distance the arm can reach diagonally
     max_reach = l1 + l2 - margin
-
-    # Scale uniformly so that farthest corner fits within circular reach
     diagonal = (width**2 + height**2)**0.5
     scale = max_reach / diagonal if diagonal != 0 else 1
 
@@ -210,15 +193,17 @@ def normalize_and_scale_points(points, l1, l2, margin=1.0):
         if x is None or y is None:
             scaled_points.append((None, None))
         else:
-            # X Translation and Scaling (normal)
+            # X Translation and Scaling
             new_x = (x - min_x) * scale + margin
             
-            # Y Translation and Scaling (INVERTED)
-            # This maps max_y (bottom of SVG) to min scaled Y, and min_y (top of SVG) 
-            # to max scaled Y, effectively flipping the image right-side up.
-            new_y = (max_y - y) * scale + margin 
+            if invert_y:
+                # Flips the Y-axis (for AI-generated Cartesian/Y-up sources)
+                # It maps the original max_y to the scaled min, and min_y to scaled max.
+                new_y = (max_y - y) * scale + margin
+            else:
+                # Standard Y-axis (for human/SVG Y-down sources)
+                new_y = (y - min_y) * scale + margin
             
-            # Explicitly cast the final coordinates to standard Python floats
             scaled_points.append((float(new_x), float(new_y)))
 
     return scaled_points

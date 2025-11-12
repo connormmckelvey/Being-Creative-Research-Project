@@ -11,10 +11,10 @@
 // --- ADDED: PHYSICAL SERVO LIMITS ---
 // CALIBRATE THESE: Find the angles where your servo stops
 // without straining, and add a small safety margin.
-#define SHOULDER_MIN_ANGLE 0
-#define SHOULDER_MAX_ANGLE 90
-#define ELBOW_MIN_ANGLE 0
-#define ELBOW_MAX_ANGLE 180
+#define SHOULDER_MIN_ANGLE -180
+#define SHOULDER_MAX_ANGLE 270
+#define ELBOW_MIN_ANGLE -65
+#define ELBOW_MAX_ANGLE 245
 // --- END OF ADD ---
 
 // --- NEW: SHOULDER SERVO PULSE WIDTH CALIBRATION ---
@@ -48,7 +48,7 @@ int tail = 0;
 bool active = false; // Flag to show if arm is busy moving
 
 // Line reader
-char lineBuf[64];
+char lineBuf[128];
 size_t lineIdx = 0;
 
 // Request throttling
@@ -161,10 +161,18 @@ void pen_down() {
 }
 
 // Smoothly moves both servos from current to destination angles
-void move_to(float shoulder_dest, float elbow_dest) {
+void move_to(float shoulder_destination, float elbow_destination) {
   // --- UPDATED: Constrain to physical limits ---
-  shoulder_dest = constrain(shoulder_dest, SHOULDER_MIN_ANGLE, SHOULDER_MAX_ANGLE);
-  elbow_dest = constrain(elbow_dest, ELBOW_MIN_ANGLE, ELBOW_MAX_ANGLE);
+  // float shoulder_dest = constrain(shoulder_destination, SHOULDER_MIN_ANGLE, SHOULDER_MAX_ANGLE);
+  // float elbow_dest = constrain(elbow_destination, ELBOW_MIN_ANGLE, ELBOW_MAX_ANGLE);
+  // if (shoulder_dest != shoulder_destination || elbow_dest != elbow_destination)
+  // {
+  //   Serial.println("Warning: Commanded angles out of bounds, constrained.");
+  //   lcd.setCursor(0, 0);
+  //   lcd.print("Angle Constrained");
+  // }
+  float shoulder_dest = shoulder_destination;
+  float elbow_dest = elbow_destination;
 
   float shoulder_start = shoulder_currentAngle;
   float elbow_start = elbow_currentAngle;
@@ -258,6 +266,8 @@ void loop() {
   if (!active && !buffer_is_empty()) {
     active = true; // Mark arm as busy
     String cmd = buffer_pop();
+    Serial.print("Processing command: ");
+    Serial.println(cmd);
 
     // Display command on LCD
     lcd.setCursor(0, 1);
@@ -307,7 +317,8 @@ void loop() {
         }
       } 
       else {
-        Serial.println("Invalid format");
+        Serial.print("Invalid format: ");
+        Serial.println(cmd);
         lcd.setCursor(0, 0);
         lcd.print("Invalid format  ");
       }

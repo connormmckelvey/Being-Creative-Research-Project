@@ -7,15 +7,16 @@ import random
 # --- CONFIGURATION ---
 # NOTE: Adjust BASE_DIR if your main script's BASE_DIR is located differently.
 BASE_DIR = Path(__file__).parent.parent 
+XY_FILE_DIR = BASE_DIR / "data" / "xy_files"
 
-def read_points_file(xy_file_name):
+def read_points_file():
     """
     Reads the list of (x, y) coordinates from a text file.
     
     IMPORTANT: This now assumes the file contains one tuple per line, 
     matching the line-by-line output format of the external script.
     """
-    xy_file_path = BASE_DIR / "data" / "xy_files" / xy_file_name
+    xy_file_path = next(XY_FILE_DIR.glob('*'))
     points_list = []
     
     try:
@@ -33,7 +34,7 @@ def read_points_file(xy_file_name):
         return []
     except Exception as e:
         # e.g., invalid syntax (<unknown>, line X)
-        print(f"Error reading or parsing file {xy_file_name}: {e}")
+        print(f"Error reading or parsing file {xy_file_path}: {e}")
         return []
 
 def plot_xy_points(points_list, title="SVG Path Visualization"):
@@ -107,15 +108,9 @@ def plot_xy_points(points_list, title="SVG Path Visualization"):
     plt.show()
 
 if __name__ == '__main__':
-    # --- EXAMPLE USAGE ---
-    # To test, replace 'example_output.txt' with your actual file name.
-    file_to_plot = 'output_take_it_slow_AI.svg.txt' # REPLACE with your actual file name
-    
     # 2. Read the points from the file
-    points = read_points_file(file_to_plot)
+    points = read_points_file()
     
     # 3. Plot the data
-    plot_xy_points(points, title=f"Visualization of {file_to_plot}")
+    plot_xy_points(points, title=f"Visualization of XY Points from {next(XY_FILE_DIR.glob('*')).name}")
     
-    if not points:
-        print("\nNote: Please ensure you replace 'example_output.txt' with your file name and verify its format.")

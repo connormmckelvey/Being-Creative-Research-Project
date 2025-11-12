@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2DOF Robot Arm Simulator</title>
+    <!-- Load Tailwind CSS for styling --><script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the drawing canvas */
+        #robotCanvas {
+            border: 2px solid #334155; /* Slate-700 border */
+            background-color: #f8fafc; /* White background */
+            cursor: crosshair;
+            touch-action: none; /* Prevent browser touch gestures */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 font-sans antialiased min-h-screen flex flex-col lg:flex-row justify-center items-start lg:items-stretch">
+
+    <!-- Main Container --><div class="w-full lg:w-3/5 xl:w-1/2 p-4 bg-white rounded-xl shadow-2xl flex flex-col items-center space-y-4 mb-4 lg:mb-0 lg:mr-4">
+        <h1 class="text-3xl font-extrabold text-blue-800 tracking-tight">
+            Robot Arm Simulator (2DOF)
+        </h1>
+        <div class="text-sm text-gray-600">
+            **Kinematic Configuration:** Base is at canvas center (0,0).
+        </div>
+        
+        <!-- Canvas for Visualization --><canvas id="robotCanvas" width="600" height="600" class="w-full h-[60vh] md:h-[70vh] rounded-lg"></canvas>
+        
+        <!-- Status Display --><div id="status" class="w-full text-center p-3 text-sm font-semibold rounded-lg bg-indigo-100 text-indigo-800 transition-opacity duration-300">
+            Status: Ready. (Base at 0,0)
+        </div>
+    </div>
+
+    <!-- Control Panel --><div class="w-full lg:w-2/5 xl:w-1/3 p-6 bg-white rounded-xl shadow-2xl space-y-4">
+        <h2 class="text-xl font-bold text-gray-700 border-b pb-2 mb-4">Control & Data</h2>
+        
+        <!-- Configuration --><div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="l1" class="block text-sm font-medium text-gray-700">Link L1 (Shoulder)</label>
+                <input type="number" id="l1" value="13.0" step="0.5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+            </div>
+            <div>
+                <label for="l2" class="block text-sm font-medium text-gray-700">Link L2 (Elbow)</label>
+                <input type="number" id="l2" value="12.5" step="0.5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 italic">Dimensions: L1=13.0, L2=12.5. Max reach is 25.5 units.</p>
+
+        <!-- Command Input --><div>
+            <label for="commandInput" class="block text-sm font-medium text-gray-700">G-Code / Angle Commands</label>
+            <textarea id="commandInput" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border font-mono text-xs" placeholder="Example commands: (100.5, 90.0)&#10;PEN DOWN&#10;(100.5, 10.0)&#10;PEN UP&#10;(0.0, 90.0)">
+START
+PEN DOWN
+(45.0, 90.0)
+(135.0, 90.0)
+(45.0, 180.0)
+(45.0, 90.0)
+PEN UP
+
+(90.0, 90.0)
+PEN DOWN
+(60.0, 100.0)
+(120.0, 100.0)
+(90.0, 150.0)
+(60.0, 100.0)
+PEN UP
+END
+            </textarea>
+        </div>
+
+        <!-- Simulation Buttons --><div class="grid grid-cols-3 gap-3">
+            <button id="runPauseButton" class="py-3 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg transition duration-150 ease-in-out">
+                Start Run
+            </button>
+             <button id="stepButton" class="py-3 px-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-lg transition duration-150 ease-in-out">
+                Step Next Command
+            </button>
+            <button id="resetButton" class="py-3 px-2 bg-gray-400 hover:bg-gray-500 text-white font-bold rounded-lg shadow-lg transition duration-150 ease-in-out">
+                Reset Canvas
+            </button>
+        </div>
+
+        <!-- Display & Export Controls --><div class="pt-4 border-t mt-4 space-y-3">
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Display & Export</h3>
+            
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" id="toggleArm" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+                <label for="toggleArm" class="text-sm font-medium text-gray-700">Show Robot Arm</label>
+            </div>
+            
+            <!-- NEW: Fill Shapes Checkbox -->
+            <div class="flex items-center space-x-2">
+                <input type="checkbox" id="fillShapes" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                <label for="fillShapes" class="text-sm font-medium text-gray-700">Fill Shapes (Use START/END)</label>
+            </div>
+            
+            <button id="exportButton" class="w-full py-3 px-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow-lg transition duration-150 ease-in-out">
+                Export First Quadrant Drawing as PNG
+            </button>
+        </div>
+
+        <!-- Live Position Display --><div class="pt-4 border-t mt-4">
+            <h3 class="text-lg font-semibold text-gray-700 mb-2">Live Position (Current Index: <span id="commandIndexDisplay">0</span>)</h3>
+            <div id="livePos" class="font-mono text-sm bg-gray-50 p-3 rounded-md">
+                <p>Shoulder Angle (S): <span id="sAngle">--</span>&deg;</p>
+                <p>Elbow Angle (E): <span id="eAngle">--</span>&deg;</p>
+                <p>End Effector (X, Y): <span id="xyPos">--</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration and State ---
+        const canvas = document.getElementById('robotCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusElement = document.getElementById('status');
+        const sAngleDisplay = document.getElementById('sAngle');
+        const eAngleDisplay = document.getElementById('eAngle');
+        const xyPosDisplay = document.getElementById('xyPos');
+        const commandIndexDisplay = document.getElementById('commandIndexDisplay');
+        const runPauseButton = document.getElementById('runPauseButton');
+        const stepButton = document.getElementById('stepButton');
+        const toggleArmCheckbox = document.getElementById('toggleArm');
+        const fillShapesCheckbox = document.getElementById('fillShapes'); // NEW: Fill checkbox
+        const exportButton = document.getElementById('exportButton');
+        
+        let runTimeoutId = null; 
+        let isRunning = false; 
+        let commands = [];
+        let commandIndex = 0; // Tracks the next command to execute
+        let penIsDown = false;
+        let pathSegments = []; 
+
+        // Canvas coordinate constants
+        const CANVAS_WIDTH = 600;
+        const CANVAS_HEIGHT = 600;
+        
+        // Base is now at the CENTER of the canvas for 4-quadrant view
+        const CANVAS_BASE_X = CANVAS_WIDTH / 2;
+        const CANVAS_BASE_Y = CANVAS_HEIGHT / 2; 
+
+        // Scale factor must be mutable and based on half the canvas size
+        let PIXELS_PER_UNIT; 
+
+        // --- Core Helper Functions ---
+
+        function degreesToRadians(degrees) {
+            return degrees * (Math.PI / 180.0);
+        }
+
+        /**
+         * Parses the command input string into an array of actions.
+         * Now includes START and END commands.
+         */
+        function parseCommands(input) {
+            const lines = input.split('\n').map(line => line.trim().toUpperCase()).filter(line => line.length > 0);
+            const parsed = [];
+
+            lines.forEach(line => {
+                // Check for simple commands
+                if (line === "PEN UP" || line === "PEN DOWN" || line === "START" || line === "END") {
+                    parsed.push({ type: line });
+                    return;
+                }
+                // Check for MOVE command
+                const match = line.match(/\(([^,]+),\s*([^)]+)\)/);
+                if (match) {
+                    const s = parseFloat(match[1]);
+                    const e = parseFloat(match[2]);
+                    if (!isNaN(s) && !isNaN(e)) {
+                        parsed.push({ type: 'MOVE', S: s, E: e });
+                        return;
+                    }
+                }
+            });
+            return parsed;
+        }
+
+        /**
+         * Forward Kinematics (FK)
+         */
+        function computeFK(S, E, l1, l2) {
+            // Angle of Link 1 (L1) relative to X-axis
+            const theta1_rad = degreesToRadians(S);
+            
+            // Angle of Link 2 (L2) relative to Link 1 (relative angle: E=90 -> 0)
+            const theta2_rel_rad = degreesToRadians(E - 90); 
+            
+            // Absolute Angle of Link 2 (L2)
+            const theta2_abs_rad = theta1_rad + theta2_rel_rad;
+
+            const x = l1 * Math.cos(theta1_rad) + l2 * Math.cos(theta2_abs_rad);
+            const y = l1 * Math.sin(theta1_rad) + l2 * Math.sin(theta2_abs_rad);
+            
+            return { x, y };
+        }
+        
+        // --- Drawing Functions ---
+
+        /**
+         * Maps Cartesian coordinates (x, y) to canvas pixel coordinates (px, py).
+         * Origin (0, 0) is mapped to (CANVAS_BASE_X, CANVAS_BASE_Y) [center].
+         */
+        function mapToCanvas(x, y) {
+            const px = CANVAS_BASE_X + x * PIXELS_PER_UNIT;
+            // Y-axis inverted for canvas coordinates (subtract from base Y)
+            const py = CANVAS_BASE_Y - y * PIXELS_PER_UNIT; 
+            return { px, py };
+        }
+
+        /**
+         * NEW: Draws filled shapes based on START/END blocks.
+         * Uses 'evenodd' fill rule to support holes (e.g., donuts).
+         */
+        function drawFills() {
+            if (!fillShapesCheckbox.checked) return;
+
+            ctx.fillStyle = '#059669'; // Indigo-700 at 30% opacity
+            let currentPath = null;
+
+            for (let i = 0; i < commandIndex; i++) {
+                const segment = pathSegments[i];
+
+                if (segment.type === 'START') {
+                    currentPath = new Path2D();
+                } else if (segment.type === 'END') {
+                    if (currentPath) {
+                        ctx.fill(currentPath, 'evenodd');
+                        currentPath = null;
+                    }
+                } else if (currentPath && segment.type === 'MOVE' && segment.drawing) {
+                    // Check if the previous segment was a continuous drawing line
+                    let prevSegment = (i > 0) ? pathSegments[i - 1] : null;
+                    
+                    // Start a new sub-path if:
+                    // 1. There is no previous segment
+                    // 2. The previous segment was not a drawing move
+                    // 3. The previous segment was PEN UP (which sets segment.drawing=false)
+                    if (!prevSegment || !prevSegment.drawing || prevSegment.type !== 'MOVE') {
+                        currentPath.moveTo(segment.start.px, segment.start.py);
+                    }
+                    currentPath.lineTo(segment.end.px, segment.end.py);
+                }
+            }
+        }
+
+        /**
+         * Draws the path lines executed up to the current commandIndex.
+         * (Renamed from drawPath)
+         */
+        function drawLines() {
+            ctx.strokeStyle = '#059669'; // Emerald-600 (Green)
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+
+            for (let i = 0; i < commandIndex; i++) {
+                const segment = pathSegments[i];
+                
+                if (segment && segment.drawing && segment.type === 'MOVE') { 
+                    ctx.beginPath();
+                    ctx.moveTo(segment.start.px, segment.start.py);
+                    ctx.lineTo(segment.end.px, segment.end.py);
+                    ctx.stroke();
+                }
+            }
+        }
+        
+        function drawAxis() {
+            ctx.strokeStyle = '#cbd5e1'; 
+            ctx.lineWidth = 1;
+            
+            // X-axis (Horizontal line through center)
+            ctx.beginPath();
+            ctx.moveTo(0, CANVAS_BASE_Y); 
+            ctx.lineTo(canvas.width, CANVAS_BASE_Y); 
+            ctx.stroke();
+
+            // Y-axis (Vertical line through center)
+            ctx.beginPath();
+            ctx.moveTo(CANVAS_BASE_X, 0); 
+            ctx.lineTo(CANVAS_BASE_X, CANVAS_HEIGHT); 
+            ctx.stroke();
+            
+            // Draw a circle at the base (origin)
+            ctx.fillStyle = '#1e293b'; 
+            ctx.beginPath();
+            ctx.arc(CANVAS_BASE_X, CANVAS_BASE_Y, 8, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        /**
+         * Draws the robot arm based on current angles and position.
+         */
+        function drawSimulationFrame(S, E, l1, l2, currentCanvasPos) {
+            const showArm = toggleArmCheckbox.checked;
+
+            if (showArm) {
+                // Calculate elbow position
+                const theta1_rad = degreesToRadians(S);
+                const elbowX = l1 * Math.cos(theta1_rad);
+                const elbowY = l1 * Math.sin(theta1_rad);
+                const { px: elbowPx, py: elbowPy } = mapToCanvas(elbowX, elbowY);
+
+                // Draw Link 1 (Shoulder to Elbow)
+                ctx.strokeStyle = '#4338ca'; 
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(CANVAS_BASE_X, CANVAS_BASE_Y);
+                ctx.lineTo(elbowPx, elbowPy);
+                ctx.stroke();
+
+                // Draw Link 2 (Elbow to Pen)
+                ctx.strokeStyle = '#6366f1'; 
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(elbowPx, elbowPy);
+                ctx.lineTo(currentCanvasPos.px, currentCanvasPos.py);
+                ctx.stroke();
+
+                // Draw Elbow Joint
+                ctx.fillStyle = '#a5b4fc'; 
+                ctx.beginPath();
+                ctx.arc(elbowPx, elbowPy, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            // --- End Effector Dot ---
+            if (penIsDown || showArm) {
+                ctx.fillStyle = penIsDown ? '#dc2626' : '#facc15'; // Red (down) or Yellow (up/target visible)
+                ctx.beginPath();
+                ctx.arc(currentCanvasPos.px, currentCanvasPos.py, 7, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+
+        /**
+         * Redraws the current frame state without advancing the command index.
+         * Now calls drawFills() and drawLines().
+         */
+        function redrawCurrentFrame() {
+            const l1 = parseFloat(document.getElementById('l1').value) || 13.0;
+            const l2 = parseFloat(document.getElementById('l2').value) || 12.5;
+
+            let S = 90.0;
+            let E = 90.0;
+            let currentCanvasPos;
+            
+            // Recalculate PIXELS_PER_UNIT based on current L1/L2 values
+            const maxReach = l1 + l2;
+            // Scale factor: Half Canvas Width / Max Reach, giving 10% margin within half the canvas
+            PIXELS_PER_UNIT = (CANVAS_WIDTH / 2) / (maxReach * 1.1); 
+
+            if (commandIndex > 0) {
+                const lastExecutedSegment = pathSegments[commandIndex - 1];
+                S = lastExecutedSegment.S;
+                E = lastExecutedSegment.E;
+                currentCanvasPos = lastExecutedSegment.end;
+                
+                // Determine the visual pen state after the last executed command
+                if (lastExecutedSegment.type === 'PEN DOWN') { penIsDown = true; }
+                else if (lastExecutedSegment.type === 'PEN UP') { penIsDown = false; }
+                else if (lastExecutedSegment.type === 'MOVE') { 
+                    penIsDown = lastExecutedSegment.drawing;
+                }
+
+            } else {
+                // Index is 0 (home position)
+                const fkResult = computeFK(S, E, l1, l2);
+                currentCanvasPos = mapToCanvas(fkResult.x, fkResult.y);
+                penIsDown = false;
+            }
+
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            drawAxis();
+            drawFills(); // NEW: Draw fills first
+            drawLines(); // (Renamed from drawPath)
+            drawSimulationFrame(S, E, l1, l2, currentCanvasPos);
+        }
+        
+        // --- Simulation Control ---
+        
+        function updateButtonState(runnable) {
+            stepButton.disabled = !runnable;
+            runPauseButton.disabled = !runnable && !isRunning;
+            if (isRunning) {
+                runPauseButton.textContent = 'Pause Run';
+                runPauseButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                runPauseButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
+            } else {
+                runPauseButton.textContent = 'Start Run';
+                runPauseButton.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+                runPauseButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            }
+        }
+
+        function stopContinuousRun() {
+            clearTimeout(runTimeoutId);
+            runTimeoutId = null;
+            isRunning = false;
+            statusElement.textContent = `Status: Paused. Command ${commandIndex} of ${pathSegments.length}.`;
+            updateButtonState(commandIndex < pathSegments.length);
+        }
+
+        function startContinuousRun() {
+            if (runTimeoutId) return; // Already running
+            
+            if (commandIndex >= pathSegments.length) {
+                statusElement.textContent = "Status: Simulation Complete! Press Reset to restart.";
+                updateButtonState(false);
+                return;
+            }
+
+            isRunning = true;
+            updateButtonState(false); 
+            
+            function loop() {
+                if (!processNextCommand()) {
+                    stopContinuousRun();
+                    statusElement.textContent = "Status: Simulation Complete! Press Reset to restart.";
+                } else {
+                    runTimeoutId = setTimeout(loop, 100); // 100ms step delay
+                }
+            }
+            loop();
+        }
+
+        /**
+         * Processes the next command and redraws the canvas.
+         * Now calls drawFills() and drawLines().
+         */
+        function processNextCommand() {
+            if (commandIndex >= pathSegments.length) {
+                return false; 
+            }
+
+            const segment = pathSegments[commandIndex];
+            
+            const { end, drawing, S, E, FK, type } = segment;
+
+            // Update pen state for the **visual cue** at the END of this command.
+            if (type === 'PEN DOWN') { penIsDown = true; }
+            if (type === 'PEN UP') { penIsDown = false; }
+            if (type === 'MOVE') { 
+                penIsDown = drawing;
+            }
+            
+            // 1. Increment index before drawing, so the current segment is included
+            commandIndex++; 
+
+            // 2. Redraw everything
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            drawAxis();
+            drawFills(); // NEW: Draw fills first
+            drawLines(); // (Renamed from drawPath)
+
+            // 3. Draw the arm at the end of the current segment
+            const l1 = parseFloat(document.getElementById('l1').value) || 13.0;
+            const l2 = parseFloat(document.getElementById('l2').value) || 12.5;
+            drawSimulationFrame(S, E, l1, l2, end);
+
+            // Update live display
+            commandIndexDisplay.textContent = commandIndex;
+            sAngleDisplay.textContent = S.toFixed(2);
+            eAngleDisplay.textContent = E.toFixed(2);
+            xyPosDisplay.textContent = `(${FK.x.toFixed(1)}, ${FK.y.toFixed(1)})`;
+
+            // Update status
+            const action = type === 'MOVE' ? `MOVE to (${S.toFixed(1)}, ${E.toFixed(1)})` : type;
+            statusElement.textContent = `Status: Executed command ${commandIndex}/${pathSegments.length}: ${action}.`;
+
+            updateButtonState(commandIndex < pathSegments.length);
+            return true;
+        }
+
+        function stepSimulation() {
+            stopContinuousRun(); // Ensure continuous run is stopped
+
+            if (commandIndex < pathSegments.length) {
+                processNextCommand();
+            } else {
+                statusElement.textContent = "Status: Simulation Complete! Press Reset to restart.";
+                updateButtonState(false);
+            }
+        }
+
+        /**
+         * Calculates all path segments based on commands.
+         * Now includes START and END segments.
+         */
+        function calculatePath() {
+            const rawCommands = parseCommands(document.getElementById('commandInput').value);
+            const l1 = parseFloat(document.getElementById('l1').value) || 13.0;
+            const l2 = parseFloat(document.getElementById('l2').value) || 12.5;
+            
+            // Recalculate PIXELS_PER_UNIT based on current L1/L2 values
+            const maxReach = l1 + l2;
+            PIXELS_PER_UNIT = (CANVAS_WIDTH / 2) / (maxReach * 1.1); 
+
+            // Start at home position (90, 90)
+            let currentS = 90.0; 
+            let currentE = 90.0; 
+            let currentFK = computeFK(currentS, currentE, l1, l2);
+            let currentCanvasPos = mapToCanvas(currentFK.x, currentFK.y);
+            let prevCanvasPos = currentCanvasPos;
+            let drawing = false;
+
+            pathSegments = [];
+            
+            rawCommands.forEach(cmd => {
+                const segment = { 
+                    type: cmd.type, 
+                    start: prevCanvasPos, 
+                    end: prevCanvasPos, 
+                    drawing: drawing,
+                    S: currentS,
+                    E: currentE,
+                    FK: currentFK
+                };
+
+                if (cmd.type === "PEN DOWN") {
+                    drawing = true;
+                } else if (cmd.type === "PEN UP") {
+                    drawing = false;
+                } else if (cmd.type === "START" || cmd.type === "END") {
+                    // No position change, just push the command
+                } else if (cmd.type === "MOVE") {
+                    segment.drawing = drawing;
+
+                    currentS = cmd.S;
+                    currentE = cmd.E;
+
+                    currentFK = computeFK(currentS, currentE, l1, l2);
+                    currentCanvasPos = mapToCanvas(currentFK.x, currentFK.y);
+                    
+                    segment.S = currentS;
+                    segment.E = currentE;
+                    segment.FK = currentFK;
+                    segment.end = currentCanvasPos;
+
+                    prevCanvasPos = currentCanvasPos; 
+                }
+                pathSegments.push(segment);
+            });
+            return rawCommands;
+        }
+
+        function resetSimulation() {
+            stopContinuousRun(); 
+            
+            commands = calculatePath();
+
+            commandIndex = 0;
+            penIsDown = false;
+
+            // Redraw to show the initial home position
+            redrawCurrentFrame();
+
+            // Get initial FK for display update
+            const l1 = parseFloat(document.getElementById('l1').value) || 13.0;
+            const l2 = parseFloat(document.getElementById('l2').value) || 12.5;
+            const fkResult = computeFK(90.0, 90.0, l1, l2);
+
+            statusElement.textContent = `Status: Canvas Reset. Loaded ${pathSegments.length} commands. Ready to start or step.`;
+            sAngleDisplay.textContent = (90.0).toFixed(1);
+            eAngleDisplay.textContent = (90.0).toFixed(1);
+            xyPosDisplay.textContent = `(${fkResult.x.toFixed(1)}, ${fkResult.y.toFixed(1)})`;
+            commandIndexDisplay.textContent = commandIndex;
+            updateButtonState(pathSegments.length > 0);
+        }
+
+        // --- Event Listeners ---
+        runPauseButton.addEventListener('click', () => {
+            if (isRunning) {
+                stopContinuousRun();
+            } else {
+                startContinuousRun();
+            }
+        });
+        stepButton.addEventListener('click', stepSimulation);
+        document.getElementById('resetButton').addEventListener('click', resetSimulation);
+        
+        toggleArmCheckbox.addEventListener('change', redrawCurrentFrame);
+        fillShapesCheckbox.addEventListener('change', redrawCurrentFrame); // NEW: Redraw on fill change
+
+        // Custom Export Logic to only capture the First Quadrant (Q1: X+, Y+)
+        exportButton.addEventListener('click', () => {
+            // 1. Define the size of the Q1 output image (half the main canvas size)
+            const quarterWidth = CANVAS_WIDTH / 2;
+            const quarterHeight = CANVAS_HEIGHT / 2;
+
+            // 2. Create a temporary canvas
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = quarterWidth;
+            tempCanvas.height = quarterHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Set background color of the exported image to match the main canvas
+            tempCtx.fillStyle = '#f8fafc';
+            tempCtx.fillRect(0, 0, quarterWidth, quarterHeight);
+
+            // 3. Copy the Q1 region from the main canvas to the temporary canvas
+            // Q1 (Cartesian X+, Y+) is the Top-Right quadrant of the centered canvas.
+            const sourceX = CANVAS_BASE_X; // Start from center X
+            const sourceY = 0;             // Start from top Y (since Cartesian Y+ is up)
+            
+            tempCtx.drawImage(
+                canvas,
+                sourceX, sourceY, quarterWidth, quarterHeight, // Source rectangle
+                0, 0, quarterWidth, quarterHeight             // Destination rectangle
+            );
+
+            // 4. Trigger download using the temporary canvas data
+            const imageURL = tempCanvas.toDataURL('image/png'); 
+            const link = document.createElement('a');
+            link.download = 'robot_drawing_Q1_only.png';
+            link.href = imageURL;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            statusElement.textContent = "Status: First Quadrant drawing exported successfully!";
+        });
+
+
+        // Auto-reset when dimensions or commands change
+        document.getElementById('l1').addEventListener('change', resetSimulation);
+        document.getElementById('l2').addEventListener('change', resetSimulation);
+        document.getElementById('commandInput').addEventListener('change', resetSimulation);
+
+        // Initial setup
+        resetSimulation();
+
+    </script>
+</body>
+</html>

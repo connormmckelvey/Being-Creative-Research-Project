@@ -1,7 +1,0 @@
-START
-(0,90)
-PEN DOWN
-(45,135)
-PEN UP
-(90,90)
-END

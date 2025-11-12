@@ -1,10 +1,12 @@
 from svg_to_xy import *
 from xy_to_angles_inverse_kinamatics import *
 from command_generator import *
+from xydrawing_tester import *
 from pathlib import Path
 import serial
 import time
 import shutil
+
 
 # --- Configuration ---
 BASE_DIR = Path(__file__).parent.parent
@@ -79,7 +81,7 @@ def main():
                                 ser.write((cmd + '\n').encode())
                                 print(f"    Sent [{command_index + 1}/{len(commands)}]: {cmd}")
                                 command_index += 1
-                                time.sleep(0.05) # Small delay between sends
+                                time.sleep(0.5) # Small delay between sends
                             else:
                                 break # No more commands left
             
@@ -146,19 +148,31 @@ def generate_robot_command_from_xy(xy_filename, l1, l2):
 def move_file_into_cmd_files(src_path):
     shutil.move(src_path, BASE_DIR / "data" / "command_files" / src_path.name)
 
+def visualize_xy_file():
+    # 2. Read the points from the file
+    points = read_points_file()
+    # 3. Plot the data
+    plot_xy_points(points, title=f"Visualization of XY Points from {next(XY_FILE_DIR.glob('*')).name}")
+
 
 '''USER FUNCTIONS TO CALL
+    visualize_xy_file()
+    - reads the first xy file in /data/xy_files/ and visualizes it
+
     move_file_into_cmd_files(src_path)
     - moves a file at src_path into the /data/command_files/ directory
+    
     generate_robot_command_from_xy(xy_filename, l1, l2)
     - expects an xy file in /data/xy_files/xy_filename
     - l1 and l2 are the lengths of the two arm segments
     - generates a command file at /data/command_file_storage/commands_xy_filename.txt
+    
     generate_robot_command_from_svg(svg_filename, l1, l2)
     - expects an svg file in /data/svg_files/svg_filename
     - l1 and l2 are the lengths of the two arm segments
     - generates a command file at /data/command_file_storage/commands_svg_filename.txt
     - might error if the svg has points out of reach of the arm
+    
     main()
     - connects to the Arduino and sends commands from the command file in /data/command_files/
     - WILL DO THE FIRST FILE IT FINDS IN THAT DIRECTORY
@@ -171,7 +185,7 @@ if __name__ == '__main__':
          print(f"Using command file: {file.name}")
          generate_robot_command_from_svg(file.name, l1=13, l2=12.5, samples_per_segment=5)
     
-    
-    #generate_robot_command_from_xy("square_xy.txt", l1=13, l2=12.5)
-    #shutil.move(BASE_DIR / "data" / "command_file_storage" / "commands_square_xy.txt.txt", BASE_DIR / "data" / "command_files" / "commands_square_xy.txt.txt")
+    #generate_robot_command_from_xy("2_dots_lmao.txt", l1=13, l2=12.5)
+    #move_file_into_cmd_files(BASE_DIR / "data" / "command_file_storage" / "2_dots_lmao.txt.txt")
     #main()
+    #visualize_xy_file()
