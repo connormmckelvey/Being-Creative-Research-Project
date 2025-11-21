@@ -185,7 +185,7 @@ if __name__ == '__main__':
          print(f"Using command file: {file.name}")
          generate_robot_command_from_svg(file.name, l1=13, l2=12.5, samples_per_segment=5)
     
-    #generate_robot_command_from_xy("2_dots_lmao.txt", l1=13, l2=12.5)
-    #move_file_into_cmd_files(BASE_DIR / "data" / "command_file_storage" / "2_dots_lmao.txt.txt")
+    # generate_robot_command_from_xy("2_dots_lmao.txt", l1=13, l2=12.5)
+    # move_file_into_cmd_files(BASE_DIR / "data" / "command_file_storage" / "2_dots_lmao.txt.txt")
     #main()
-    #visualize_xy_file()
+    # visualize_xy_file()

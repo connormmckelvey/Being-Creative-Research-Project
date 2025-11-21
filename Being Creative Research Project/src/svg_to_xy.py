@@ -2,6 +2,7 @@ import numpy as np
 from rdp import rdp
 from svgpathtools import svg2paths2, Path as svgPath
 from pathlib import Path
+import math
 
 # --- GLOBAL CONFIGURATION ---
 RDP_TOLERANCE = 5.0 
@@ -165,12 +166,22 @@ def add_pen_down_none_tuples(points):
         points.insert(insert_pos, (None, None))
     return points
 
-
 def normalize_and_scale_points(points, l1, l2, margin, invert_y):
     """
-    Normalize and scale SVG points. Conditionally inverts Y-axis based on the 
-    'invert_y' flag passed from the caller (which checks the filename).
+    Uniformly scale and translate points so the drawing fits inside the
+    target box:
+        X: 13   → 18
+        Y: 12.5 → 18
+    while preserving aspect ratio.
     """
+    TARGET_MIN_X = 13.0
+    TARGET_MAX_X = 18.0
+    TARGET_MIN_Y = 12.5
+    TARGET_MAX_Y = 18.0
+
+    TARGET_W = TARGET_MAX_X - TARGET_MIN_X  # = 5
+    TARGET_H = TARGET_MAX_Y - TARGET_MIN_Y  # = 5.5
+
     valid_points = [(x, y) for (x, y) in points if x is not None and y is not None]
     if not valid_points:
         return points
@@ -184,26 +195,44 @@ def normalize_and_scale_points(points, l1, l2, margin, invert_y):
     width = max_x - min_x
     height = max_y - min_y
 
-    max_reach = l1 + l2 - margin
-    diagonal = (width**2 + height**2)**0.5
-    scale = max_reach / diagonal if diagonal != 0 else 1
+    # ---- Uniform scale to preserve proportions ----
+    if width == 0 or height == 0:
+        scale = 1.0
+    else:
+        scale = min(TARGET_W / width, TARGET_H / height)
 
     scaled_points = []
     for (x, y) in points:
         if x is None or y is None:
             scaled_points.append((None, None))
-        else:
-            # X Translation and Scaling
-            new_x = (x - min_x) * scale + margin
-            
-            if invert_y:
-                # Flips the Y-axis (for AI-generated Cartesian/Y-up sources)
-                # It maps the original max_y to the scaled min, and min_y to scaled max.
-                new_y = (max_y - y) * scale + margin
-            else:
-                # Standard Y-axis (for human/SVG Y-down sources)
-                new_y = (y - min_y) * scale + margin
-            
-            scaled_points.append((float(new_x), float(new_y)))
+            continue
 
-    return scaled_points
+        sx = (x - min_x) * scale
+
+        if invert_y:
+            sy = (max_y - y) * scale
+        else:
+            sy = (y - min_y) * scale
+
+        scaled_points.append((sx, sy))
+
+    # New bounding box after scale
+    xs2 = [p[0] for p in scaled_points if p[0] is not None]
+    ys2 = [p[1] for p in scaled_points if p[1] is not None]
+    min_sx, min_sy = min(xs2), min(ys2)
+    max_sx, max_sy = max(xs2), max(ys2)
+
+    # Compute translation offsets
+    translate_x = TARGET_MIN_X - min_sx
+    translate_y = TARGET_MIN_Y - min_sy
+
+    final_points = []
+    for (sx, sy) in scaled_points:
+        if sx is None or sy is None:
+            final_points.append((None, None))
+        else:
+            final_points.append(
+                (float(sx + translate_x), float(sy + translate_y))
+            )
+
+    return final_points
